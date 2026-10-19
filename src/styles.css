@@ -109,3 +109,5 @@ table{width:100%;border-collapse:collapse}th,td{padding:8px 12px;text-align:left
 .storage{margin-top:18px;font-size:13px}.linkbtn{background:none;border:0;color:var(--brand);text-decoration:underline;cursor:pointer;font:inherit;padding:0}
 
 @media (max-width:640px){.cam{max-width:calc(var(--ar, 0.75) * 52vh);max-width:calc(var(--ar, 0.75) * 52dvh)}.bigbtn{padding:12px}}
+
+.cam.sq video{object-fit:cover}.cam.sq .guide{width:54%;height:74%}

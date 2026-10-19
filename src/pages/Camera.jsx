@@ -7,6 +7,16 @@ import { analyzeFrame, evaluateFrame, gazeOf } from '../utils/imageQuality.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const GOOD = ['face', 'single', 'size', 'centered', 'pose', 'eyes', 'gaze'];
+/** On phones the preview and the saved photo are a centred SQUARE, so what you see is what is checked and saved. */
+const sqCanvas = document.createElement('canvas');
+function frameOf(v, square) {
+  if (!square) return v;
+  const side = Math.min(v.videoWidth, v.videoHeight);
+  sqCanvas.width = sqCanvas.height = side;
+  sqCanvas.getContext('2d').drawImage(v, (v.videoWidth - side) / 2, (v.videoHeight - side) / 2, side, side, 0, 0, side, side);
+  return sqCanvas;
+}
+const dimsOf = (s) => ({ w: s.videoWidth || s.width, h: s.videoHeight || s.height });
 const lookFaces = async (src) => { const faces = await detectFaces(src); return { faces, gaze: faces.length === 1 ? gazeOf(src, faces[0].pts) : null }; };
 
 /** Separate camera page for ONE candidate. All state lives here, so leaving the page resets everything. */
@@ -29,7 +39,7 @@ export default function Camera({ roll, candidates, photos, addPhoto, back, nextC
   const [devices, setDevices] = useState([]);
   const [camName, setCamName] = useState('');
   const activeId = useRef('');
-  const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches; // phone / tablet
+  const coarse = (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent); // phone / tablet only
 
   const cand = candidates.find((c) => c.roll === roll);
   const previous = photos.find((p) => p.roll.toLowerCase() === roll.toLowerCase());
@@ -45,15 +55,11 @@ export default function Camera({ roll, candidates, photos, addPhoto, back, nextC
       setPopup({ title: 'Camera problem', text: `${cam.detail} Check the camera connection and the browser's camera permission.` });
   }, [cam.status]);
 
-  /** Phones: toggle front/rear with facingMode. Desktops with several webcams: cycle through the devices. */
+  /** Phones only: toggle front <-> rear camera. (Desktop uses the default webcam and has no switch option.) */
   function switchCamera() {
     if (saving) return;
     setResult(null); setSnack('');
-    if (coarse) { setDeviceId(''); setFacing((f) => (f === 'user' ? 'environment' : 'user')); }
-    else {
-      const i = devices.findIndex((d) => d.deviceId === activeId.current);
-      setDeviceId(devices[(i + 1) % devices.length].deviceId);
-    }
+    setDeviceId(''); setFacing((f) => (f === 'user' ? 'environment' : 'user'));
   }
   function startCamera() { if (saving) return; setLast(null); setResult(null); setSnack(''); setCamOn(true); setRetryKey((k) => k + 1); }
 
@@ -66,7 +72,8 @@ export default function Camera({ roll, candidates, photos, addPhoto, back, nextC
         const t0 = performance.now(), v = videoRef.current;
         if (v?.videoWidth && !busyRef.current) {
           try {
-            const r = evaluateFrame({ vw: v.videoWidth, vh: v.videoHeight, ...(await lookFaces(v)), quality: analyzeFrame(v), tracker: tracker.current });
+            const src = frameOf(v, coarse), d = dimsOf(src);
+            const r = evaluateFrame({ vw: d.w, vh: d.h, ...(await lookFaces(src)), quality: analyzeFrame(src), tracker: tracker.current });
             if (stop) break;
             setResult(r); setSnack(r.ready ? '' : r.hint);
             if (r.ready) { stop = true; capture(false); } // auto capture
@@ -86,8 +93,9 @@ export default function Camera({ roll, candidates, photos, addPhoto, back, nextC
     busyRef.current = true;
     try {
       const cv = document.createElement('canvas');
-      cv.width = v.videoWidth; cv.height = v.videoHeight;
-      cv.getContext('2d').drawImage(v, 0, 0);
+      const side = Math.min(v.videoWidth, v.videoHeight);
+      if (coarse) { cv.width = cv.height = side; cv.getContext('2d').drawImage(v, (v.videoWidth - side) / 2, (v.videoHeight - side) / 2, side, side, 0, 0, side, side); }
+      else { cv.width = v.videoWidth; cv.height = v.videoHeight; cv.getContext('2d').drawImage(v, 0, 0); }
       const r = evaluateFrame({ vw: cv.width, vh: cv.height, ...(await lookFaces(cv)), quality: analyzeFrame(cv), skipStability: true });
       // Auto capture needs the full look-at-camera check. Manual capture only needs one face in frame.
       const MANUAL = ['face', 'single', 'resolution'];
@@ -146,7 +154,7 @@ export default function Camera({ roll, candidates, photos, addPhoto, back, nextC
         <>
           {previous && <div className="alert warn">Retaking: the earlier photo <code>{previous.fileName}</code> will be replaced when the new photo is saved.</div>}
           <div className="camwrap">
-            <CameraPreview videoRef={videoRef} enabled={camOn} retryKey={retryKey} guide={guide} facingMode={facing} deviceId={deviceId}
+            <CameraPreview videoRef={videoRef} enabled={camOn} retryKey={retryKey} guide={guide} facingMode={facing} deviceId={deviceId} square={coarse}
               onStatus={setCam} onStart={startCamera}
               onDevices={(devs, id, fm) => {
                 setDevices(devs); activeId.current = id;
@@ -160,7 +168,7 @@ export default function Camera({ roll, candidates, photos, addPhoto, back, nextC
               {saving ? 'Saving…' : 'Capture'}
             </button>
             <button className="btn" onClick={startCamera} disabled={saving}>Restart camera</button>
-            {devices.length > 1 && <button className="btn" onClick={switchCamera} disabled={saving || cam.status === 'loading'}>🔄 Switch camera</button>}
+            {coarse && devices.length > 1 && <button className="btn" onClick={switchCamera} disabled={saving || cam.status === 'loading'}>🔄 Switch camera</button>}
           </div>
           <p className="muted" style={{ margin: '6px 0 0' }}>{camName && <b>{camName}. </b>}Look at the camera: the photo is taken automatically. If it doesn't, press Capture.</p>
           {cam.status === 'ready' && models === 'loading' && <p className="muted">Loading face detection…</p>}
@@ -171,7 +179,7 @@ export default function Camera({ roll, candidates, photos, addPhoto, back, nextC
         <div className="alert ok" style={{ padding: 16 }}>
           <b>✓ Photo captured and saved as {last.fileName}</b>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center', margin: '12px 0', flexWrap: 'wrap' }}>
-            <img src={last.url} alt={last.roll} style={{ width: 160, height: 120, objectFit: 'cover', borderRadius: 8, border: '2px solid var(--ok)' }} />
+            <img src={last.url} alt={last.roll} style={{ width: 160, height: coarse ? 160 : 120, objectFit: 'cover', borderRadius: 8, border: '2px solid var(--ok)' }} />
             <div className="muted">Roll Number: <b>{last.roll}</b><br />Not clear? Press Retake.</div>
           </div>
           <div className="row" style={{ gap: 8 }}>

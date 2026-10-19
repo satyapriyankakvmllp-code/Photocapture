@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
  * facingMode: 'user' (front, default) | 'environment' (rear). deviceId overrides it (desktop with several webcams).
  * The previous stream is always stopped before a new one starts.
  */
-export default function CameraPreview({ videoRef, enabled, deviceId, facingMode = 'user', retryKey, onStatus, onDevices, onStart, guide }) {
+export default function CameraPreview({ videoRef, enabled, deviceId, facingMode = 'user', square = false, retryKey, onStatus, onDevices, onStart, guide }) {
   const streamRef = useRef(null);
   const [state, setState] = useState({ status: 'idle', detail: '' });
   const [dims, setDims] = useState(null);
@@ -66,7 +66,7 @@ export default function CameraPreview({ videoRef, enabled, deviceId, facingMode 
 
   const { status, detail } = state;
   return (
-    <div className="cam" style={{ aspectRatio: dims && status === 'ready' ? `${dims.w} / ${dims.h}` : '4 / 3', '--ar': dims && status === 'ready' ? dims.w / dims.h : 4 / 3 }}>
+    <div className={`cam ${square ? 'sq' : ''}`} style={square ? { aspectRatio: '1 / 1', '--ar': 1 } : { aspectRatio: dims && status === 'ready' ? `${dims.w} / ${dims.h}` : '4 / 3', '--ar': dims && status === 'ready' ? dims.w / dims.h : 4 / 3 }}>
       <video ref={videoRef} playsInline muted autoPlay className={`${status === 'ready' ? '' : 'hidden'} ${mirror ? 'mirror' : ''}`} />
       {status === 'ready' && <div className={`guide ${guide || ''}`} aria-hidden="true" />}
       {status === 'loading' && <div className="overlay"><div className="spinner" /><p>Starting camera…</p></div>}
