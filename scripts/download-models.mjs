@@ -2,7 +2,8 @@
 import { mkdir, writeFile, access } from 'node:fs/promises';
 const BASE = 'https://raw.githubusercontent.com/vladmandic/face-api/master/model/';
 const FILES = ['tiny_face_detector_model-weights_manifest.json', 'tiny_face_detector_model.bin',
-  'face_landmark_68_tiny_model-weights_manifest.json', 'face_landmark_68_tiny_model.bin'];
+  'face_landmark_68_tiny_model-weights_manifest.json', 'face_landmark_68_tiny_model.bin',
+  'face_recognition_model-weights_manifest.json', 'face_recognition_model.bin'];
 await mkdir('public/models', { recursive: true });
 for (const f of FILES) {
   const p = `public/models/${f}`;

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import CameraPreview from '../components/CameraPreview.jsx';
 import { CONFIG } from '../utils/config.js';
 import { safeName } from '../utils/candidateUtils.js';
-import { detectFaces, loadModels } from '../utils/faceDetection.js';
+import { describeFace, detectFaces, faceDistance, loadModels } from '../utils/faceDetection.js';
 import { analyzeFrame, evaluateFrame, gazeOf } from '../utils/imageQuality.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -34,6 +34,10 @@ export default function Camera({ roll, candidates, photos, addPhoto, back, nextC
   const [saving, setSaving] = useState(false);
   const [popup, setPopup] = useState(null);
   const [snack, setSnack] = useState('');
+  const [dupMsg, setDupMsg] = useState('');   // "already exists with roll number …"
+  const pausedRef = useRef(false);            // auto capture paused after a duplicate until the person leaves
+  const photosRef = useRef(photos);
+  photosRef.current = photos;
   const [facing, setFacing] = useState('user');   // front camera by default
   const [deviceId, setDeviceId] = useState('');
   const [devices, setDevices] = useState([]);
@@ -76,7 +80,8 @@ export default function Camera({ roll, candidates, photos, addPhoto, back, nextC
             const r = evaluateFrame({ vw: d.w, vh: d.h, ...(await lookFaces(src)), quality: analyzeFrame(src), tracker: tracker.current });
             if (stop) break;
             setResult(r); setSnack(r.ready ? '' : r.hint);
-            if (r.ready) { stop = true; capture(false); } // auto capture
+            if (r.checks.single.s !== 'pass') { pausedRef.current = false; setDupMsg(''); } // person left: re-arm
+            if (r.ready && !pausedRef.current) { stop = true; capture(false); } // auto capture
           } catch (e) { console.error(e); }
         }
         await sleep(Math.max(20, CONFIG.detectIntervalMs - (performance.now() - t0)));
@@ -106,19 +111,38 @@ export default function Camera({ roll, candidates, photos, addPhoto, back, nextC
         if (!manual) setLoopKey((k) => k + 1);
         busyRef.current = false; return;
       }
+      // Is this the same person as a photo already saved under ANOTHER roll number?
+      let descriptor = null;
+      if (CONFIG.duplicateFaceCheck) {
+        try { descriptor = await describeFace(cv); } catch { descriptor = null; }
+        if (descriptor) {
+          let best = null;
+          for (const p of photosRef.current) {
+            if (!p.descriptor || p.roll.toLowerCase() === cand.roll.toLowerCase()) continue;
+            const d = faceDistance(descriptor, p.descriptor);
+            if (!best || d < best.d) best = { d, roll: p.roll };
+          }
+          if (best && best.d < CONFIG.duplicateFaceDistance) {
+            pausedRef.current = true;
+            setDupMsg(`This person already exists with roll number ${best.roll}.`);
+            setSnack(''); setLoopKey((k) => k + 1);
+            busyRef.current = false; return;
+          }
+        }
+      }
       setSaving(true);
       const blob = await new Promise((res) => cv.toBlob(res, 'image/jpeg', CONFIG.jpegQuality));
       await sleep(120); // lets the "Saving photo…" feedback render
-      await save(blob);
+      await save(blob, descriptor);
     } catch (e) { setPopup({ title: 'Capture failed', text: `${e.message} Press Capture to try again.` }); }
     setSaving(false);
     busyRef.current = false;
   }
 
   /** Always ROLL.jpg. Persisted (IndexedDB / disk) BEFORE it is shown as saved; a retake replaces the earlier photo. */
-  async function save(blob) {
+  async function save(blob, descriptor = null) {
     const fileName = `${safeName(cand.roll)}.jpg`;
-    const photo = { roll: cand.roll, fileName, blob, url: URL.createObjectURL(blob), time: new Date().toISOString() };
+    const photo = { roll: cand.roll, fileName, blob, descriptor, url: URL.createObjectURL(blob), time: new Date().toISOString() };
     try {
       await addPhoto(photo);
       setLast(photo); setCamOn(false); setSnack('');
@@ -189,7 +213,8 @@ export default function Camera({ roll, candidates, photos, addPhoto, back, nextC
         </div>
       )}
 
-      {snack && cam.status === 'ready' && !last && <div className="snack bad" role="status">{snack}</div>}
+      {dupMsg && cam.status === 'ready' && !last && <div className="snack bad dup" role="alert">{dupMsg}</div>}
+      {snack && !dupMsg && cam.status === 'ready' && !last && <div className="snack bad" role="status">{snack}</div>}
 
       {popup && (
         <div className="modal"><div className="card narrow">

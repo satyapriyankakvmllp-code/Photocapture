@@ -20,5 +20,8 @@ export const CONFIG = {
   minEyeOpen: 0.17,               // eye aspect ratio; below = eyes closed/not visible
   gazeCheck: true,                // estimate whether the pupils point at the camera (set false to rely on head pose only)
   gazeTolerance: 0.15,            // allowed pupil offset from eye centre (0 = exact centre)
+  // Same person captured under two roll numbers? Compares face descriptors of photos taken in this exam.
+  duplicateFaceCheck: true,
+  duplicateFaceDistance: 0.5,     // lower = stricter match (0.6 is the usual 'same person' limit; 0.5 avoids false alarms)
   jpegQuality: 0.92,
 };

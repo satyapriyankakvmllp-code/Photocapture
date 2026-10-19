@@ -110,4 +110,11 @@ table{width:100%;border-collapse:collapse}th,td{padding:8px 12px;text-align:left
 
 @media (max-width:640px){.cam{max-width:calc(var(--ar, 0.75) * 52vh);max-width:calc(var(--ar, 0.75) * 52dvh)}.bigbtn{padding:12px}}
 
-.cam.sq video{object-fit:cover}.cam.sq .guide{width:54%;height:74%}
+.cam.sq video{object-fit:cover}.cam.sq .guide{width:64%;height:82%}
+
+/* Phones: wider frame (less side padding) and the red/green message bar at the TOP so it never covers the buttons */
+@media (max-width:640px){
+  main{padding:8px}.card{padding:12px;border-radius:8px}
+  .cam{max-width:100%}
+  .snack{top:64px;bottom:auto;left:10px;right:10px;transform:none;text-align:center;padding:10px 14px}
+}

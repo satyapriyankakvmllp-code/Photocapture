@@ -33,7 +33,7 @@ export async function savePhoto(examId, photo) {
   try {
     const db = await openDB();
     const tx = db.transaction(STORE, 'readwrite');
-    tx.objectStore(STORE).put({ key: keyOf(examId, photo.roll), examId, roll: photo.roll, fileName: photo.fileName, type: 'image/jpeg', data, time: photo.time });
+    tx.objectStore(STORE).put({ key: keyOf(examId, photo.roll), examId, roll: photo.roll, fileName: photo.fileName, type: 'image/jpeg', data, time: photo.time, descriptor: photo.descriptor || null });
     await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); });
   } catch (e) {
     if (!d) throw e; // on the web IndexedDB is the only copy, so this must not fail silently
@@ -41,7 +41,7 @@ export async function savePhoto(examId, photo) {
 }
 
 const toPhoto = (r) => ({
-  roll: r.roll, fileName: r.fileName, time: r.time,
+  roll: r.roll, fileName: r.fileName, time: r.time, descriptor: r.descriptor || null,
   blob: new Blob([r.data], { type: r.type || 'image/jpeg' }),
 });
 
