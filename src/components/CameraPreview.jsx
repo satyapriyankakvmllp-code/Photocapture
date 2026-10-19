@@ -66,7 +66,7 @@ export default function CameraPreview({ videoRef, enabled, deviceId, facingMode 
 
   const { status, detail } = state;
   return (
-    <div className="cam" style={{ aspectRatio: dims && status === 'ready' ? `${dims.w} / ${dims.h}` : '4 / 3' }}>
+    <div className="cam" style={{ aspectRatio: dims && status === 'ready' ? `${dims.w} / ${dims.h}` : '4 / 3', '--ar': dims && status === 'ready' ? dims.w / dims.h : 4 / 3 }}>
       <video ref={videoRef} playsInline muted autoPlay className={`${status === 'ready' ? '' : 'hidden'} ${mirror ? 'mirror' : ''}`} />
       {status === 'ready' && <div className={`guide ${guide || ''}`} aria-hidden="true" />}
       {status === 'loading' && <div className="overlay"><div className="spinner" /><p>Starting camera…</p></div>}
