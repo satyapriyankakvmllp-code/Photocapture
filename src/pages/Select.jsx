@@ -25,6 +25,7 @@ export default function Select({ examId, candidates, photos, info, openCamera })
     if (photos.some((p) => p.roll.toLowerCase() === cand.roll.toLowerCase())) setRoll(cand.roll);
     else launch(cand.roll);
   };
+  const pick = (r) => { setQ(r); setRoll(''); setErr(''); setOpen(false); };
   const onSearch = () => {
     if (opening) return;
     const exact = candidates.find((c) => c.roll.toLowerCase() === term);
@@ -55,7 +56,7 @@ export default function Select({ examId, candidates, photos, info, openCamera })
               {matches.length === 0
                 ? <li className="none">No matching roll numbers</li>
                 : matches.map((c, i) => (
-                  <li key={c.roll} className={i === hi ? 'on' : ''} role="option" onMouseDown={() => submit(c.roll)}>
+                  <li key={c.roll} className={i === hi ? 'on' : ''} role="option" onMouseDown={() => pick(c.roll)}>
                     <b>{c.roll}</b><small>{c.status === 'Success' ? '✓ Captured' : 'Pending'}</small>
                   </li>
                 ))}
@@ -63,7 +64,7 @@ export default function Select({ examId, candidates, photos, info, openCamera })
           )}
         </div>
         <button className="btn primary" disabled={opening} onClick={onSearch}>
-          {opening ? <><span className="mini-spin" /> Opening camera…</> : 'Search'}
+          {opening ? <><span className="mini-spin" /> Opening camera…</> : 'Capture'}
         </button>
         <button className="btn" onClick={clear}>Clear</button>
       </div>
@@ -87,7 +88,6 @@ export default function Select({ examId, candidates, photos, info, openCamera })
         </div>
       )}
 
-      {!roll && !err && <p className="muted">Type a roll number and press Search (or Enter). The camera opens for that candidate.</p>}
 
       <p className="muted storage">
         {info

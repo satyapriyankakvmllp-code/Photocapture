@@ -3,9 +3,8 @@ import { parseExcel } from '../utils/excelUtils.js';
 import { makeCandidates } from '../utils/candidateUtils.js';
 import { downloadPhotosZip } from '../utils/zip.js';
 
-export default function Upload({ examId, loading, storageErr, count, fileName, skipped, photos, onLoad, onClear, startCapture }) {
+export default function Upload({ examId, loading, storageErr, captured = 0, count, fileName, skipped, photos, onLoad, onClear, startCapture }) {
   const [err, setErr] = useState('');
-  const warn = 'You already captured photos for the current list. Replacing or removing the list will clear them. Download the ZIP first if you need them. Continue?';
 
   const onFile = async (e) => {
     const f = e.target.files[0]; e.target.value = '';
@@ -13,12 +12,11 @@ export default function Upload({ examId, loading, storageErr, count, fileName, s
     setErr('');
     try {
       const r = await parseExcel(f);
-      if (photos.length && !window.confirm(warn)) return;
       onLoad(makeCandidates(r.rows), f.name, r.summary.invalid);
     } catch (x) { setErr(x.message); }
   };
   const remove = () => {
-    if (photos.length ? window.confirm(warn) : window.confirm('Remove this Excel file?')) onClear();
+    if (window.confirm('Remove this Excel file? Photos already captured are kept.')) onClear();
   };
 
   if (loading) return <div className="card narrow" style={{ alignItems: 'center' }}><div className="spinner dark" /><p>Loading saved data…</p></div>;
@@ -36,6 +34,7 @@ export default function Upload({ examId, loading, storageErr, count, fileName, s
           <div>
             <div>📄 <b>{fileName}</b></div>
             <div className="big">{count} candidates</div>
+            <div className="muted">Captured so far: {captured} of {count}</div>
             {skipped > 0 && <div className="muted">{skipped} duplicate roll numbers skipped</div>}
           </div>
           <button className="xbtn" onClick={remove} aria-label="Remove file" title="Remove this file and upload another">✕</button>

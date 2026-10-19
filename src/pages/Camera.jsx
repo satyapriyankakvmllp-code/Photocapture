@@ -3,10 +3,11 @@ import CameraPreview from '../components/CameraPreview.jsx';
 import { CONFIG } from '../utils/config.js';
 import { safeName } from '../utils/candidateUtils.js';
 import { detectFaces, loadModels } from '../utils/faceDetection.js';
-import { analyzeFrame, evaluateFrame } from '../utils/imageQuality.js';
+import { analyzeFrame, evaluateFrame, gazeOf } from '../utils/imageQuality.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const GOOD = ['face', 'single', 'size', 'centered', 'pose', 'eyes'];
+const GOOD = ['face', 'single', 'size', 'centered', 'pose', 'eyes', 'gaze'];
+const lookFaces = async (src) => { const faces = await detectFaces(src); return { faces, gaze: faces.length === 1 ? gazeOf(src, faces[0].pts) : null }; };
 
 /** Separate camera page for ONE candidate. All state lives here, so leaving the page resets everything. */
 export default function Camera({ roll, candidates, photos, addPhoto, back, nextCandidate }) {
@@ -65,7 +66,7 @@ export default function Camera({ roll, candidates, photos, addPhoto, back, nextC
         const t0 = performance.now(), v = videoRef.current;
         if (v?.videoWidth && !busyRef.current) {
           try {
-            const r = evaluateFrame({ vw: v.videoWidth, vh: v.videoHeight, faces: await detectFaces(v), quality: analyzeFrame(v), tracker: tracker.current });
+            const r = evaluateFrame({ vw: v.videoWidth, vh: v.videoHeight, ...(await lookFaces(v)), quality: analyzeFrame(v), tracker: tracker.current });
             if (stop) break;
             setResult(r); setSnack(r.ready ? '' : r.hint);
             if (r.ready) { stop = true; capture(false); } // auto capture
@@ -87,12 +88,12 @@ export default function Camera({ roll, candidates, photos, addPhoto, back, nextC
       const cv = document.createElement('canvas');
       cv.width = v.videoWidth; cv.height = v.videoHeight;
       cv.getContext('2d').drawImage(v, 0, 0);
-      const r = evaluateFrame({ vw: cv.width, vh: cv.height, faces: await detectFaces(cv), quality: analyzeFrame(cv), skipStability: true });
-      const pass = manual
-        ? ['face', 'single', 'pose', 'eyes', 'resolution'].every((k) => r.checks[k].s === 'pass')
-        : r.ready;
+      const r = evaluateFrame({ vw: cv.width, vh: cv.height, ...(await lookFaces(cv)), quality: analyzeFrame(cv), skipStability: true });
+      // Auto capture needs the full look-at-camera check. Manual capture only needs one face in frame.
+      const MANUAL = ['face', 'single', 'resolution'];
+      const pass = manual ? MANUAL.every((k) => r.checks[k].s === 'pass') : r.ready;
       if (!pass) {
-        const bad = manual ? ['face', 'single', 'pose', 'eyes', 'resolution'].find((k) => r.checks[k].s !== 'pass') : null;
+        const bad = manual ? MANUAL.find((k) => r.checks[k].s !== 'pass') : null;
         setSnack(manual ? r.checks[bad].label : r.hint);
         if (!manual) setLoopKey((k) => k + 1);
         busyRef.current = false; return;
@@ -161,7 +162,7 @@ export default function Camera({ roll, candidates, photos, addPhoto, back, nextC
             <button className="btn" onClick={startCamera} disabled={saving}>Restart camera</button>
             {devices.length > 1 && <button className="btn" onClick={switchCamera} disabled={saving || cam.status === 'loading'}>🔄 Switch camera</button>}
           </div>
-          <p className="muted" style={{ margin: '6px 0 0' }}>{camName && <b>{camName}. </b>}Look straight at the camera. The photo is taken automatically, or press Capture.</p>
+          <p className="muted" style={{ margin: '6px 0 0' }}>{camName && <b>{camName}. </b>}Look at the camera: the photo is taken automatically. If it doesn't, press Capture.</p>
           {cam.status === 'ready' && models === 'loading' && <p className="muted">Loading face detection…</p>}
         </>
       )}

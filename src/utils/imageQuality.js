@@ -47,13 +47,45 @@ export function poseOf(pts) {
   };
 }
 
+const gc = document.createElement('canvas');
+const gctx = gc.getContext('2d', { willReadFrequently: true });
+/**
+ * Rough gaze estimate: where the dark pupil/iris sits between the two eye corners (0..1, 0.5 = looking straight).
+ * Averages both eyes. Returns null if it cannot be measured. It is a heuristic, not eye tracking.
+ */
+export function gazeOf(source, pts) {
+  const eye = (i) => {
+    const xs = [], ys = [];
+    for (let k = 0; k < 6; k++) { xs.push(pts[i + k].x); ys.push(pts[i + k].y); }
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    if (x1 - x0 < 8 || y1 - y0 < 3) return null;
+    const W = 40, H = 16;
+    gc.width = W; gc.height = H;
+    gctx.drawImage(source, x0, y0, x1 - x0, y1 - y0, 0, 0, W, H);
+    const d = gctx.getImageData(0, 0, W, H).data;
+    const g = new Float32Array(W * H);
+    let mean = 0;
+    for (let j = 0; j < W * H; j++) { g[j] = 0.299 * d[j * 4] + 0.587 * d[j * 4 + 1] + 0.114 * d[j * 4 + 2]; mean += g[j]; }
+    mean /= W * H;
+    let sw = 0, sx = 0;
+    for (let y = 2; y < H - 2; y++) for (let x = 0; x < W; x++) { // skip lid rows
+      const w = Math.max(0, mean - g[y * W + x]) ** 2;
+      sw += w; sx += w * x;
+    }
+    return sw > 0 ? sx / sw / (W - 1) : null;
+  };
+  const a = eye(36), b = eye(42);
+  if (a == null || b == null) return null;
+  return (a + b) / 2;
+}
+
 const P = 'pass', W = 'warn', F = 'fail';
 
 /**
  * Turns detections + metrics into a checklist. `tracker` holds movement state between frames
  * (omit it with skipStability for the final check on a captured still).
  */
-export function evaluateFrame({ vw, vh, faces, quality, tracker, now = performance.now(), skipStability = false }) {
+export function evaluateFrame({ vw, vh, faces, gaze = null, quality, tracker, now = performance.now(), skipStability = false }) {
   const c = {};
   c.camera = { s: P, label: 'Camera active' };
   c.face = faces.length ? { s: P, label: 'Face found' } : { s: F, label: 'No face detected. Please face the camera.' };
@@ -85,7 +117,11 @@ export function evaluateFrame({ vw, vh, faces, quality, tracker, now = performan
     else if (pose.roll > CONFIG.maxRollDeg) c.pose = { s: F, label: 'Please look straight at the camera.' };
     else c.pose = { s: P, label: 'Facing camera' };
     c.eyes = pose.eyes >= CONFIG.minEyeOpen ? { s: P, label: 'Eyes open' } : { s: F, label: 'Please look straight at the camera.' };
+    c.gaze = gaze == null || !CONFIG.gazeCheck ? { s: P, label: 'n/a' }
+      : Math.abs(gaze - 0.5) <= CONFIG.gazeTolerance ? { s: P, label: 'Looking at camera' }
+      : { s: F, label: 'Please look straight at the camera.' };
   } else {
+    c.gaze = { s: F, label: 'No face' };
     c.pose = { s: F, label: 'No face' };
     c.eyes = { s: F, label: 'No face' };
   }
@@ -115,7 +151,7 @@ export function evaluateFrame({ vw, vh, faces, quality, tracker, now = performan
       ? { s: P, label: 'Stable' } : { s: W, label: 'Hold still…' };
   }
 
-  const order = ['face', 'single', 'size', 'centered', 'pose', 'eyes', 'light', 'sharp', 'resolution', 'stable'];
+  const order = ['face', 'single', 'size', 'centered', 'pose', 'eyes', 'gaze', 'light', 'sharp', 'resolution', 'stable'];
   const bad = order.find((k) => c[k].s !== P);
   return { checks: c, ready: !bad, hint: bad ? c[bad].label : 'All checks passed. You can capture.',
     metrics: { brightness: Math.round(br), sharpness: Math.round(sh), pose: pose && { yaw: +pose.yaw.toFixed(2), pitch: +pose.pitch.toFixed(2), eyes: +pose.eyes.toFixed(2) } } };

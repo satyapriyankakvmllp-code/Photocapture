@@ -18,5 +18,7 @@ export const CONFIG = {
   pitchMin: 0.40, pitchMax: 0.66, // nose height between eyes and mouth; above max = head down
   maxRollDeg: 15,                 // head tilt sideways
   minEyeOpen: 0.17,               // eye aspect ratio; below = eyes closed/not visible
+  gazeCheck: true,                // estimate whether the pupils point at the camera (set false to rely on head pose only)
+  gazeTolerance: 0.15,            // allowed pupil offset from eye centre (0 = exact centre)
   jpegQuality: 0.92,
 };
